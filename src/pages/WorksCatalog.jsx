@@ -13,10 +13,12 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 
 const WorksCatalog = () => {
-    const { worksCatalog, loading } = useData();
+    const { worksCatalog, loading, user } = useData();
     const [open, setOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState({ name: '', category: '', points: 0, notes: '' });
     const [isNew, setIsNew] = useState(false);
+
+    const isAdmin = user?.role === 'admin';
 
     if (loading) return <Box sx={{ p: 5, textAlign: 'center' }}><CircularProgress /></Box>;
 
@@ -27,13 +29,7 @@ const WorksCatalog = () => {
     };
 
     const handleEdit = (item) => {
-        setSelectedItem({ 
-            id: item.id,
-            name: item.name || '',
-            category: item.category || '',
-            points: item.points || 0,
-            notes: item.notes || '' // 確定したフィールド名を使用
-        });
+        setSelectedItem({ ...item });
         setIsNew(false);
         setOpen(true);
     };
@@ -61,9 +57,8 @@ const WorksCatalog = () => {
     };
 
     const handleImmediateDelete = async (id) => {
-        if (!id) return;
+        if (!id || !window.confirm('この制作物を本当に削除しますか？この操作は元に戻せません。')) return;
         try {
-            // アラートなしで即時削除を実行
             await deleteDoc(doc(db, 'worksCatalog', id));
         } catch (e) {
             console.error("Delete Error:", e);
@@ -74,9 +69,11 @@ const WorksCatalog = () => {
         <Box sx={{ p: 3 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h5" sx={{ fontWeight: 'bold' }}>制作物マスタ</Typography>
-                <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenAdd}>
-                    新規追加
-                </Button>
+                {isAdmin && (
+                    <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenAdd}>
+                        新規追加
+                    </Button>
+                )}
             </Box>
 
             <TableContainer component={Paper}>
@@ -87,7 +84,7 @@ const WorksCatalog = () => {
                             <TableCell sx={{ fontWeight: 'bold' }}>制作物名</TableCell>
                             <TableCell align="right" sx={{ fontWeight: 'bold' }}>ポイント</TableCell>
                             <TableCell sx={{ fontWeight: 'bold' }}>備考</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 'bold' }}>操作</TableCell>
+                            {isAdmin && <TableCell align="center" sx={{ fontWeight: 'bold' }}>操作</TableCell>}
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -99,40 +96,44 @@ const WorksCatalog = () => {
                                 <TableCell sx={{ fontSize: '0.85rem', color: '#666' }}>
                                     {item.notes || '-'}
                                 </TableCell>
-                                <TableCell align="center">
-                                    <Stack direction="row" spacing={1} justifyContent="center">
-                                        <IconButton onClick={() => handleEdit(item)} sx={{ color: '#757575' }}>
-                                            <EditIcon />
-                                        </IconButton>
-                                        <IconButton 
-                                            onClick={() => handleImmediateDelete(item.id)} 
-                                            sx={{ color: '#757575' }}
-                                        >
-                                            <DeleteIcon />
-                                        </IconButton>
-                                    </Stack>
-                                </TableCell>
+                                {isAdmin && (
+                                    <TableCell align="center">
+                                        <Stack direction="row" spacing={1} justifyContent="center">
+                                            <IconButton onClick={() => handleEdit(item)} sx={{ color: '#757575' }}>
+                                                <EditIcon />
+                                            </IconButton>
+                                            <IconButton 
+                                                onClick={() => handleImmediateDelete(item.id)} 
+                                                sx={{ color: '#d32f2f' }}
+                                            >
+                                                <DeleteIcon />
+                                            </IconButton>
+                                        </Stack>
+                                    </TableCell>
+                                )}
                             </TableRow>
                         ))}
                     </TableBody>
                 </Table>
             </TableContainer>
 
-            <Dialog open={open} onClose={() => setOpen(false)} maxWidth="xs" fullWidth>
-                <DialogTitle sx={{ fontWeight: 'bold' }}>{isNew ? '制作物の新規追加' : '制作物情報の編集'}</DialogTitle>
-                <DialogContent dividers>
-                    <Stack spacing={2} sx={{ mt: 1 }}>
-                        <TextField label="名称" fullWidth value={selectedItem.name} onChange={(e) => setSelectedItem({...selectedItem, name: e.target.value})} />
-                        <TextField label="カテゴリ" fullWidth value={selectedItem.category} onChange={(e) => setSelectedItem({...selectedItem, category: e.target.value})} />
-                        <TextField label="ポイント" type="number" fullWidth value={selectedItem.points} onChange={(e) => setSelectedItem({...selectedItem, points: e.target.value})} />
-                        <TextField label="備考" fullWidth multiline rows={2} value={selectedItem.notes} onChange={(e) => setSelectedItem({...selectedItem, notes: e.target.value})} />
-                    </Stack>
-                </DialogContent>
-                <DialogActions sx={{ p: 2 }}>
-                    <Button onClick={() => setOpen(false)} color="inherit">キャンセル</Button>
-                    <Button onClick={handleSave} variant="contained">保存する</Button>
-                </DialogActions>
-            </Dialog>
+            {isAdmin && (
+                 <Dialog open={open} onClose={() => setOpen(false)} maxWidth="xs" fullWidth>
+                    <DialogTitle sx={{ fontWeight: 'bold' }}>{isNew ? '制作物の新規追加' : '制作物情報の編集'}</DialogTitle>
+                    <DialogContent dividers>
+                        <Stack spacing={2} sx={{ mt: 1 }}>
+                            <TextField label="名称" fullWidth value={selectedItem.name} onChange={(e) => setSelectedItem({...selectedItem, name: e.target.value})} />
+                            <TextField label="カテゴリ" fullWidth value={selectedItem.category} onChange={(e) => setSelectedItem({...selectedItem, category: e.target.value})} />
+                            <TextField label="ポイント" type="number" fullWidth value={selectedItem.points} onChange={(e) => setSelectedItem({...selectedItem, points: e.target.value})} />
+                            <TextField label="備考" fullWidth multiline rows={2} value={selectedItem.notes} onChange={(e) => setSelectedItem({...selectedItem, notes: e.target.value})} />
+                        </Stack>
+                    </DialogContent>
+                    <DialogActions sx={{ p: 2 }}>
+                        <Button onClick={() => setOpen(false)} color="inherit">キャンセル</Button>
+                        <Button onClick={handleSave} variant="contained">保存する</Button>
+                    </DialogActions>
+                </Dialog>
+            )}
         </Box>
     );
 };

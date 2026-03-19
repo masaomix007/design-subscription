@@ -51,20 +51,14 @@ const CustomerDetail = () => {
         return acc + (Number(tr.points) || 0);
     }, 0);
 
-    const isAdmin = user !== null; 
+    const isAdmin = user?.role === 'admin';
 
-    // --- 【修正版】月次ポイント付与関数 ---
     const handleAddMonthlyPoints = async () => {
-        console.log("Monthly Points Grant Process Started");
-
         if (!plan) {
             alert("プランが設定されていません。");
             return;
         }
-
-        // --- 修正箇所：window.confirm を削除して直接実行 ---
         try {
-            console.log("Writing to Firestore...");
             await addDoc(collection(db, 'transactions'), {
                 customerId: id,
                 points: monthlyPoints,
@@ -72,12 +66,8 @@ const CustomerDetail = () => {
                 description: `月次ポイント付与 (${planName})`,
                 date: new Date().toISOString()
             });
-            
-            // 完了したらアラートではなく、コンソールと画面更新で確認
-            console.log("Success!");
             alert(`${planName}のポイント（${monthlyPoints}pt）を付与しました`);
         } catch (e) {
-            console.error("Firebase Error:", e);
             alert("付与エラー: " + e.message);
         }
     };
@@ -125,7 +115,15 @@ const CustomerDetail = () => {
                             <Typography variant="caption" color="text.secondary">会社名 / 担当者</Typography>
                             <Typography variant="body1" sx={{ fontWeight: 'bold' }}>{customer.name} / {customer.contactName || '-'}</Typography>
                             <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>メールアドレス</Typography>
-                            <Typography variant="body2">{customer.email || '-'}</Typography>
+                            <Box sx={{ pl: 1 }}>
+                                {Array.isArray(customer.email) ? (
+                                    customer.email.map((email, index) => (
+                                        <Typography key={index} variant="body2">{email}</Typography>
+                                    ))
+                                ) : (
+                                    <Typography variant="body2">{customer.email || '-'}</Typography>
+                                )}
+                            </Box>
                             <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>メモ</Typography>
                             <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', color: 'text.secondary', bgcolor: '#f9f9f9', p: 1, borderRadius: 1 }}>
                                 {customer.memo || '-'}
@@ -174,13 +172,14 @@ const CustomerDetail = () => {
                 </Grid>
             </Grid>
 
-            {/* 制作実績・ポイント調整・取引履歴はそのまま維持 */}
-            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>制作実績｜作業状況</Typography>
-                <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setSelectedTask(null); setTaskFormOpen(true); }}>
-                    新規制作実績追加
-                </Button>
-            </Box>
+            {isAdmin && (
+                <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>制作実績｜作業状況</Typography>
+                    <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setSelectedTask(null); setTaskFormOpen(true); }}>
+                        新規制作実績追加
+                    </Button>
+                </Box>
+            )}
 
             <TableContainer component={Paper} sx={{ mb: 5, borderRadius: 2 }}>
                 <Table>
@@ -191,7 +190,7 @@ const CustomerDetail = () => {
                             <TableCell align="right" sx={{ fontWeight: 'bold' }}>消費pt</TableCell>
                             <TableCell align="center" sx={{ fontWeight: 'bold' }}>ステータス</TableCell>
                             <TableCell align="center" sx={{ fontWeight: 'bold' }}>納品URL</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 'bold' }}>操作</TableCell>
+                            {isAdmin && <TableCell align="center" sx={{ fontWeight: 'bold' }}>操作</TableCell>}
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -211,26 +210,30 @@ const CustomerDetail = () => {
                                 <TableCell align="center">
                                     {work.deliveryUrl && <Button size="small" variant="outlined" startIcon={<DownloadIcon />} href={work.deliveryUrl} target="_blank">ダウンロード</Button>}
                                 </TableCell>
-                                <TableCell align="center">
-                                    <Button size="small" onClick={() => { setSelectedTask(work); setTaskFormOpen(true); }}>編集</Button>
-                                </TableCell>
+                                {isAdmin && (
+                                    <TableCell align="center">
+                                        <Button size="small" onClick={() => { setSelectedTask(work); setTaskFormOpen(true); }}>編集</Button>
+                                    </TableCell>
+                                )}
                             </TableRow>
                         ))}
                     </TableBody>
                 </Table>
             </TableContainer>
 
-            <Box sx={{ mb: 5 }}>
-                <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>ポイントの調整</Typography>
-                <Paper sx={{ p: 2, bgcolor: '#fdfdfd', border: '1px solid #e0e0e0', borderRadius: 2 }}>
-                    <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={12} sm={2}><FormControl fullWidth size="small"><InputLabel>種別</InputLabel><Select value={adjType} label="種別" onChange={(e) => setAdjType(e.target.value)}><MenuItem value="grant">付与 (+)</MenuItem><MenuItem value="consumption">消費 (-)</MenuItem></Select></FormControl></Grid>
-                        <Grid item xs={12} sm={2}><TextField fullWidth size="small" label="ポイント" type="number" value={adjPoints} onChange={(e) => setAdjPoints(e.target.value)} /></Grid>
-                        <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="備考（メモ）" value={adjMemo} onChange={(e) => setAdjMemo(e.target.value)} /></Grid>
-                        <Grid item xs={12} sm={2}><Button fullWidth variant="contained" color="primary" startIcon={isAdjusting ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />} onClick={handleManualAdjustment} disabled={isAdjusting}>実行</Button></Grid>
-                    </Grid>
-                </Paper>
-            </Box>
+            {isAdmin && (
+                <Box sx={{ mb: 5 }}>
+                    <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>ポイントの調整</Typography>
+                    <Paper sx={{ p: 2, bgcolor: '#fdfdfd', border: '1px solid #e0e0e0', borderRadius: 2 }}>
+                        <Grid container spacing={2} alignItems="center">
+                            <Grid item xs={12} sm={2}><FormControl fullWidth size="small"><InputLabel>種別</InputLabel><Select value={adjType} label="種別" onChange={(e) => setAdjType(e.target.value)}><MenuItem value="grant">付与 (+)</MenuItem><MenuItem value="consumption">消費 (-)</MenuItem></Select></FormControl></Grid>
+                            <Grid item xs={12} sm={2}><TextField fullWidth size="small" label="ポイント" type="number" value={adjPoints} onChange={(e) => setAdjPoints(e.target.value)} /></Grid>
+                            <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="備考（メモ）" value={adjMemo} onChange={(e) => setAdjMemo(e.target.value)} /></Grid>
+                            <Grid item xs={12} sm={2}><Button fullWidth variant="contained" color="primary" startIcon={isAdjusting ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />} onClick={handleManualAdjustment} disabled={isAdjusting}>実行</Button></Grid>
+                        </Grid>
+                    </Paper>
+                </Box>
+            )}
 
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>取引履歴</Typography>
             <TableContainer component={Paper} sx={{ borderRadius: 2 }}>

@@ -2,10 +2,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import { HashRouter } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
-import { DataProvider } from './contexts/DataContext';
 import { SnackbarProvider } from 'notistack';
 // Date PickerのためのProviderとAdapterをインポート
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -30,12 +28,8 @@ root.render(
             <SnackbarProvider maxSnack={3} autoHideDuration={3000}>
                 {/* LocalizationProviderでラップし、日本語とdate-fnsを設定 */}
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ja}>
-                    <DataProvider>
-                        <HashRouter>
-                            <CssBaseline />
-                            <App />
-                        </HashRouter>
-                    </DataProvider>
+                    <CssBaseline />
+                    <App />
                 </LocalizationProvider>
             </SnackbarProvider>
         </ThemeProvider>

@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
 import { db } from '../firebase';
 import { doc, updateDoc, serverTimestamp, addDoc, collection, deleteDoc } from 'firebase/firestore';
-import { useNavigate } from 'react-router-dom'; // 画面遷移用に追加
+import { useNavigate } from 'react-router-dom';
 import { 
     Box, Typography, Paper, Table, TableBody, TableCell, 
     TableContainer, TableHead, TableRow, CircularProgress, 
@@ -12,45 +12,66 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
-import VisibilityIcon from '@mui/icons-material/Visibility'; // 詳細用アイコン
+import VisibilityIcon from '@mui/icons-material/Visibility';
 
 const CustomerList = () => {
-    const { customers, plans, loading } = useData();
-    const navigate = useNavigate(); // 遷移用フック
+    const { customers, plans, loading, user, currentUserCustomer } = useData();
+    const navigate = useNavigate();
     const [open, setOpen] = useState(false);
-    const [selectedCustomer, setSelectedCustomer] = useState({ name: '', planId: '', email: '' });
+    const [selectedCustomer, setSelectedCustomer] = useState({ name: '', planId: '', email: [] });
     const [isNew, setIsNew] = useState(false);
+
+    const isAdmin = user?.role === 'admin';
+
+    useEffect(() => {
+        if (!isAdmin && currentUserCustomer) {
+            navigate(`/customers/${currentUserCustomer.id}`, { replace: true });
+        }
+    }, [isAdmin, currentUserCustomer, navigate]);
 
     if (loading) return <Box sx={{ p: 5, textAlign: 'center' }}><CircularProgress /></Box>;
 
+    if (!isAdmin) {
+        return (
+            <Box sx={{ p: 3, textAlign: 'center' }}>
+                <CircularProgress />
+                <Typography sx={{ mt: 2 }}>情報を読み込んでいます...</Typography>
+            </Box>
+        );
+    }
+
     const handleOpenAdd = () => {
-        setSelectedCustomer({ name: '', planId: '', email: '' });
+        setSelectedCustomer({ name: '', planId: '', email: '', contactName: '', memo: '' });
         setIsNew(true);
         setOpen(true);
     };
 
     const handleEdit = (customer) => {
-        setSelectedCustomer({ ...customer });
+        setSelectedCustomer({ 
+            ...customer, 
+            email: Array.isArray(customer.email) ? customer.email.join(', ') : customer.email 
+        });
         setIsNew(false);
         setOpen(true);
     };
 
     const handleSave = async () => {
         try {
+            const emailArray = typeof selectedCustomer.email === 'string' 
+                ? selectedCustomer.email.split(',').map(e => e.trim()).filter(e => e) 
+                : [];
+
             const data = {
                 name: selectedCustomer.name || '',
                 planId: selectedCustomer.planId || '',
-                email: selectedCustomer.email || '',
+                email: emailArray,
                 contactName: selectedCustomer.contactName || '',
-                memo: selectedCustomer.memo || '', // 正解のキー「memo」を使用
+                memo: selectedCustomer.memo || '',
                 updatedAt: serverTimestamp()
             };
 
             if (isNew) {
-                await addDoc(collection(db, 'customers'), {
-                    ...data,
-                    createdAt: serverTimestamp()
-                });
+                await addDoc(collection(db, 'customers'), { ...data, createdAt: serverTimestamp() });
             } else {
                 await updateDoc(doc(db, 'customers', selectedCustomer.id), data);
             }
@@ -60,9 +81,11 @@ const CustomerList = () => {
 
     const handleImmediateDelete = async (id) => {
         if (!id) return;
-        try {
-            await deleteDoc(doc(db, 'customers', id));
-        } catch (e) { console.error(e); }
+        if (window.confirm("本当にこの顧客を削除しますか？関連するデータも失われる可能性があります。")) {
+            try {
+                await deleteDoc(doc(db, 'customers', id));
+            } catch (e) { console.error(e); }
+        }
     };
 
     return (
@@ -91,24 +114,18 @@ const CustomerList = () => {
                                 <TableRow key={customer.id} hover>
                                     <TableCell sx={{ fontWeight: '500' }}>{customer.name}</TableCell>
                                     <TableCell>{plan ? plan.name : '未設定'}</TableCell>
-                                    <TableCell>{customer.email}</TableCell>
+                                    <TableCell>{Array.isArray(customer.email) ? customer.email.join(', ') : customer.email}</TableCell>
                                     <TableCell align="center">
                                         <Stack direction="row" spacing={1} justifyContent="center">
-                                            {/* ★ 詳細ボタンを追加 */}
                                             <Tooltip title="詳細表示">
-                                            <IconButton 
-                                                onClick={() => navigate(`/customers/${customer.id}`)} // customer ではなく customers
-                                                sx={{ color: '#1976d2' }}
-                                            >
-                                                <VisibilityIcon />
-                                            </IconButton>
+                                                <IconButton onClick={() => navigate(`/customers/${customer.id}`)} sx={{ color: '#1976d2' }}>
+                                                    <VisibilityIcon />
+                                                </IconButton>
                                             </Tooltip>
-                                            
                                             <IconButton onClick={() => handleEdit(customer)} sx={{ color: '#757575' }}>
                                                 <EditIcon />
                                             </IconButton>
-                                            
-                                            <IconButton onClick={() => handleImmediateDelete(customer.id)} sx={{ color: '#757575' }}>
+                                            <IconButton onClick={() => handleImmediateDelete(customer.id)} sx={{ color: '#d32f2f' }}>
                                                 <DeleteIcon />
                                             </IconButton>
                                         </Stack>
@@ -126,27 +143,19 @@ const CustomerList = () => {
                     <Stack spacing={2} sx={{ mt: 1 }}>
                         <TextField label="顧客名（会社名）" fullWidth value={selectedCustomer.name} onChange={(e) => setSelectedCustomer({...selectedCustomer, name: e.target.value})} />
                         <TextField label="担当者名" fullWidth value={selectedCustomer.contactName || ''} onChange={(e) => setSelectedCustomer({...selectedCustomer, contactName: e.target.value})} />
-                        <TextField 
-                            select 
-                            label="プラン" 
-                            fullWidth 
-                            value={selectedCustomer.planId || ''} 
-                            onChange={(e) => setSelectedCustomer({...selectedCustomer, planId: e.target.value})}
-                        >
+                        <TextField select label="プラン" fullWidth value={selectedCustomer.planId || ''} onChange={(e) => setSelectedCustomer({...selectedCustomer, planId: e.target.value})}>
                             {plans.map((option) => (
                                 <MenuItem key={option.id} value={option.id}>{option.name}</MenuItem>
                             ))}
                         </TextField>
-                        <TextField label="メールアドレス" fullWidth value={selectedCustomer.email} onChange={(e) => setSelectedCustomer({...selectedCustomer, email: e.target.value})} />
                         <TextField 
-                            label="メモ" 
+                            label="メールアドレス（カンマ区切り）" 
                             fullWidth 
-                            multiline 
-                            rows={3} 
-                            value={selectedCustomer.memo || ''} // memoを参照
-                            onChange={(e) => setSelectedCustomer({...selectedCustomer, memo: e.target.value})} 
+                            value={selectedCustomer.email}
+                            onChange={(e) => setSelectedCustomer({...selectedCustomer, email: e.target.value})} 
                         />
-                        </Stack>
+                        <TextField label="メモ" fullWidth multiline rows={3} value={selectedCustomer.memo || ''} onChange={(e) => setSelectedCustomer({...selectedCustomer, memo: e.target.value})} />
+                    </Stack>
                 </DialogContent>
                 <DialogActions sx={{ p: 2 }}>
                     <Button onClick={() => setOpen(false)} color="inherit">キャンセル</Button>
