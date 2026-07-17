@@ -27,15 +27,31 @@ const CustomerDetail = () => {
     const [isAdjusting, setIsAdjusting] = useState(false);
     const [workSortBy, setWorkSortBy] = useState('dateUsed');
     const [workSortDirection, setWorkSortDirection] = useState('desc');
+    const [transactionSortBy, setTransactionSortBy] = useState('date');
+    const [transactionSortDirection, setTransactionSortDirection] = useState('desc');
 
     const customer = customers.find(c => c.id === id);
     const customerWorks = works[id] || [];
     const customerTransactions = transactions[id] || [];
 
-    const formatSafeDate = (dateStr, formatStr) => {
-        if (!dateStr || typeof dateStr !== 'string') return '-';
+    const getDateTimestamp = (dateValue) => {
+        if (!dateValue) return 0;
+        if (typeof dateValue.toDate === 'function') return dateValue.toDate().getTime();
+        if (dateValue instanceof Date) return dateValue.getTime();
+        if (typeof dateValue === 'string') {
+            const timestamp = Date.parse(dateValue);
+            return Number.isNaN(timestamp) ? 0 : timestamp;
+        }
+        if (typeof dateValue === 'number') return dateValue;
+        return 0;
+    };
+
+    const formatSafeDate = (dateValue, formatStr) => {
+        if (!dateValue) return '-';
         try {
-            return format(parseISO(dateStr), formatStr);
+            if (typeof dateValue === 'string') return format(parseISO(dateValue), formatStr);
+            const timestamp = getDateTimestamp(dateValue);
+            return timestamp ? format(new Date(timestamp), formatStr) : '-';
         } catch {
             return '-';
         }
@@ -83,6 +99,35 @@ const CustomerDetail = () => {
         }
 
         return workSortDirection === 'asc' ? result : -result;
+    });
+
+    const handleTransactionSort = (field) => {
+        const isAsc = transactionSortBy === field && transactionSortDirection === 'asc';
+        setTransactionSortBy(field);
+        setTransactionSortDirection(isAsc ? 'desc' : 'asc');
+    };
+
+    const getTransactionTypeLabel = (type) => type === 'grant' ? '付与' : '消費';
+
+    const getTransactionSortValue = (transaction, field) => {
+        if (field === 'date') return getDateTimestamp(transaction?.date);
+        if (field === 'type') return getTransactionTypeLabel(transaction?.type);
+        if (field === 'points') return Number(transaction?.points) || 0;
+        return transaction?.description || transaction?.memo || '';
+    };
+
+    const sortedCustomerTransactions = [...customerTransactions].sort((a, b) => {
+        const aValue = getTransactionSortValue(a, transactionSortBy);
+        const bValue = getTransactionSortValue(b, transactionSortBy);
+        let result = 0;
+
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+            result = aValue - bValue;
+        } else {
+            result = String(aValue).localeCompare(String(bValue), 'ja', { numeric: true, sensitivity: 'base' });
+        }
+
+        return transactionSortDirection === 'asc' ? result : -result;
     });
 
     const handleAddMonthlyPoints = async () => {
@@ -302,12 +347,51 @@ const CustomerDetail = () => {
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>取引履歴</Typography>
             <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
                 <Table>
-                    <TableHead sx={{ bgcolor: '#f8f9fa' }}><TableRow><TableCell sx={{ fontWeight: 'bold' }}>日時</TableCell><TableCell sx={{ fontWeight: 'bold' }}>種別</TableCell><TableCell sx={{ fontWeight: 'bold' }}>内容</TableCell><TableCell align="right" sx={{ fontWeight: 'bold' }}>ポイント数</TableCell></TableRow></TableHead>
+                    <TableHead sx={{ bgcolor: '#f8f9fa' }}>
+                        <TableRow>
+                            <TableCell sx={{ fontWeight: 'bold' }}>
+                                <TableSortLabel
+                                    active={transactionSortBy === 'date'}
+                                    direction={transactionSortBy === 'date' ? transactionSortDirection : 'asc'}
+                                    onClick={() => handleTransactionSort('date')}
+                                >
+                                    日時
+                                </TableSortLabel>
+                            </TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>
+                                <TableSortLabel
+                                    active={transactionSortBy === 'type'}
+                                    direction={transactionSortBy === 'type' ? transactionSortDirection : 'asc'}
+                                    onClick={() => handleTransactionSort('type')}
+                                >
+                                    種別
+                                </TableSortLabel>
+                            </TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>
+                                <TableSortLabel
+                                    active={transactionSortBy === 'description'}
+                                    direction={transactionSortBy === 'description' ? transactionSortDirection : 'asc'}
+                                    onClick={() => handleTransactionSort('description')}
+                                >
+                                    内容
+                                </TableSortLabel>
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                                <TableSortLabel
+                                    active={transactionSortBy === 'points'}
+                                    direction={transactionSortBy === 'points' ? transactionSortDirection : 'asc'}
+                                    onClick={() => handleTransactionSort('points')}
+                                >
+                                    ポイント数
+                                </TableSortLabel>
+                            </TableCell>
+                        </TableRow>
+                    </TableHead>
                     <TableBody>
-                        {customerTransactions.map(tr => (
+                        {sortedCustomerTransactions.map(tr => (
                             <TableRow key={tr.id} hover>
                                 <TableCell sx={{ fontSize: '0.85rem' }}>{formatSafeDate(tr.date, 'yyyy/MM/dd HH:mm')}</TableCell>
-                                <TableCell><Chip label={tr.type === 'grant' ? '付与' : '消費'} size="small" variant="outlined" /></TableCell>
+                                <TableCell><Chip label={getTransactionTypeLabel(tr.type)} size="small" variant="outlined" /></TableCell>
                                 <TableCell>{tr.description || tr.memo}</TableCell>
                                 <TableCell align="right" sx={{ fontWeight: 'bold', color: tr.points > 0 ? 'success.main' : 'error.main' }}>{tr.points > 0 ? `+${tr.points}` : tr.points} pt</TableCell>
                             </TableRow>
