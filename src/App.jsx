@@ -10,6 +10,8 @@ import PlanList from './pages/PlanList';
 import WorksCatalog from './pages/WorksCatalog';
 import { Box, CircularProgress } from '@mui/material';
 
+const basename = import.meta.env.BASE_URL.replace(/\/+$/, '') || undefined;
+
 // 簡易的なローディング表示
 const SimpleLoader = () => (
     <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -74,7 +76,7 @@ function App() {
 
 // アプリケーション全体をBrowserRouterとDataProviderでラップ
 const AppWrapper = () => (
-    <BrowserRouter>
+    <BrowserRouter basename={basename}>
         <DataProvider>
             <App />
         </DataProvider>
