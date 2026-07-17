@@ -6,7 +6,7 @@ import { collection, addDoc } from 'firebase/firestore';
 import { 
     Box, Typography, Button, Paper, Grid, CircularProgress, Alert, Chip,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Stack, Divider,
-    TextField, Select, MenuItem, FormControl, InputLabel 
+    TextField, Select, MenuItem, FormControl, InputLabel, TableSortLabel
 } from '@mui/material';
 import { 
     Add as AddIcon, ArrowBack as ArrowBackIcon, AccountCircle, 
@@ -25,6 +25,8 @@ const CustomerDetail = () => {
     const [adjPoints, setAdjPoints] = useState('');
     const [adjMemo, setAdjMemo] = useState('');
     const [isAdjusting, setIsAdjusting] = useState(false);
+    const [workSortBy, setWorkSortBy] = useState('dateUsed');
+    const [workSortDirection, setWorkSortDirection] = useState('desc');
 
     const customer = customers.find(c => c.id === id);
     const customerWorks = works[id] || [];
@@ -34,7 +36,7 @@ const CustomerDetail = () => {
         if (!dateStr || typeof dateStr !== 'string') return '-';
         try {
             return format(parseISO(dateStr), formatStr);
-        } catch (e) {
+        } catch {
             return '-';
         }
     };
@@ -52,6 +54,36 @@ const CustomerDetail = () => {
     }, 0);
 
     const isAdmin = user?.role === 'admin';
+
+    const handleWorkSort = (field) => {
+        const isAsc = workSortBy === field && workSortDirection === 'asc';
+        setWorkSortBy(field);
+        setWorkSortDirection(isAsc ? 'desc' : 'asc');
+    };
+
+    const getWorkSortValue = (work, field) => {
+        if (field === 'dateUsed') {
+            const timestamp = Date.parse(work?.dateUsed || '');
+            return Number.isNaN(timestamp) ? 0 : timestamp;
+        }
+        if (field === 'pointsUsed') return Number(work?.pointsUsed) || 0;
+        if (field === 'status') return work?.status || '制作中';
+        return work?.name || '';
+    };
+
+    const sortedCustomerWorks = [...customerWorks].sort((a, b) => {
+        const aValue = getWorkSortValue(a, workSortBy);
+        const bValue = getWorkSortValue(b, workSortBy);
+        let result = 0;
+
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+            result = aValue - bValue;
+        } else {
+            result = String(aValue).localeCompare(String(bValue), 'ja', { numeric: true, sensitivity: 'base' });
+        }
+
+        return workSortDirection === 'asc' ? result : -result;
+    });
 
     const handleAddMonthlyPoints = async () => {
         if (!plan) {
@@ -90,7 +122,7 @@ const CustomerDetail = () => {
             setAdjPoints('');
             setAdjMemo('');
             alert("ポイントを更新しました");
-        } catch (e) {
+        } catch {
             alert("更新に失敗しました");
         } finally {
             setIsAdjusting(false);
@@ -185,16 +217,48 @@ const CustomerDetail = () => {
                 <Table>
                     <TableHead sx={{ bgcolor: '#f8f9fa' }}>
                         <TableRow>
-                            <TableCell sx={{ fontWeight: 'bold' }}>実施日</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold' }}>制作物名</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>消費pt</TableCell>
-                            <TableCell align="center" sx={{ fontWeight: 'bold' }}>ステータス</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>
+                                <TableSortLabel
+                                    active={workSortBy === 'dateUsed'}
+                                    direction={workSortBy === 'dateUsed' ? workSortDirection : 'asc'}
+                                    onClick={() => handleWorkSort('dateUsed')}
+                                >
+                                    実施日
+                                </TableSortLabel>
+                            </TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>
+                                <TableSortLabel
+                                    active={workSortBy === 'name'}
+                                    direction={workSortBy === 'name' ? workSortDirection : 'asc'}
+                                    onClick={() => handleWorkSort('name')}
+                                >
+                                    制作物名
+                                </TableSortLabel>
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                                <TableSortLabel
+                                    active={workSortBy === 'pointsUsed'}
+                                    direction={workSortBy === 'pointsUsed' ? workSortDirection : 'asc'}
+                                    onClick={() => handleWorkSort('pointsUsed')}
+                                >
+                                    消費pt
+                                </TableSortLabel>
+                            </TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 'bold' }}>
+                                <TableSortLabel
+                                    active={workSortBy === 'status'}
+                                    direction={workSortBy === 'status' ? workSortDirection : 'asc'}
+                                    onClick={() => handleWorkSort('status')}
+                                >
+                                    ステータス
+                                </TableSortLabel>
+                            </TableCell>
                             <TableCell align="center" sx={{ fontWeight: 'bold' }}>納品URL</TableCell>
                             {isAdmin && <TableCell align="center" sx={{ fontWeight: 'bold' }}>操作</TableCell>}
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {customerWorks.map(work => (
+                        {sortedCustomerWorks.map(work => (
                             <TableRow key={work.id} hover>
                                 <TableCell sx={{ fontSize: '0.85rem' }}>{formatSafeDate(work.dateUsed, 'yyyy/MM/dd')}</TableCell>
                                 <TableCell>

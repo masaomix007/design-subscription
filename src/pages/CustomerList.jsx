@@ -7,7 +7,8 @@ import {
     Box, Typography, Paper, Table, TableBody, TableCell, 
     TableContainer, TableHead, TableRow, CircularProgress, 
     Button, IconButton, Stack, Dialog, DialogTitle, 
-    DialogContent, DialogActions, TextField, MenuItem, Tooltip
+    DialogContent, DialogActions, TextField, MenuItem, Tooltip,
+    TableSortLabel
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -20,6 +21,8 @@ const CustomerList = () => {
     const [open, setOpen] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState({ name: '', planId: '', email: [] });
     const [isNew, setIsNew] = useState(false);
+    const [sortBy, setSortBy] = useState('name');
+    const [sortDirection, setSortDirection] = useState('asc');
 
     const isAdmin = user?.role === 'admin';
 
@@ -88,6 +91,35 @@ const CustomerList = () => {
         }
     };
 
+    const getPlanName = (planId) => {
+        const plan = plans.find(p => p.id === planId);
+        return plan ? plan.name : '未設定';
+    };
+
+    const getEmailText = (email) => {
+        if (Array.isArray(email)) return email.join(', ');
+        return email || '';
+    };
+
+    const getSortValue = (customer, field) => {
+        if (field === 'planName') return getPlanName(customer.planId);
+        if (field === 'email') return getEmailText(customer.email);
+        return customer.name || '';
+    };
+
+    const handleSort = (field) => {
+        const isAsc = sortBy === field && sortDirection === 'asc';
+        setSortBy(field);
+        setSortDirection(isAsc ? 'desc' : 'asc');
+    };
+
+    const sortedCustomers = [...customers].sort((a, b) => {
+        const aValue = String(getSortValue(a, sortBy)).toLocaleLowerCase();
+        const bValue = String(getSortValue(b, sortBy)).toLocaleLowerCase();
+        const result = aValue.localeCompare(bValue, 'ja', { numeric: true, sensitivity: 'base' });
+        return sortDirection === 'asc' ? result : -result;
+    });
+
     return (
         <Box sx={{ p: 3 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -101,20 +133,44 @@ const CustomerList = () => {
                 <Table>
                     <TableHead sx={{ bgcolor: '#f8f9fa' }}>
                         <TableRow>
-                            <TableCell sx={{ fontWeight: 'bold' }}>顧客名</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold' }}>プラン</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold' }}>メールアドレス</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>
+                                <TableSortLabel
+                                    active={sortBy === 'name'}
+                                    direction={sortBy === 'name' ? sortDirection : 'asc'}
+                                    onClick={() => handleSort('name')}
+                                >
+                                    顧客名
+                                </TableSortLabel>
+                            </TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>
+                                <TableSortLabel
+                                    active={sortBy === 'planName'}
+                                    direction={sortBy === 'planName' ? sortDirection : 'asc'}
+                                    onClick={() => handleSort('planName')}
+                                >
+                                    プラン
+                                </TableSortLabel>
+                            </TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>
+                                <TableSortLabel
+                                    active={sortBy === 'email'}
+                                    direction={sortBy === 'email' ? sortDirection : 'asc'}
+                                    onClick={() => handleSort('email')}
+                                >
+                                    メールアドレス
+                                </TableSortLabel>
+                            </TableCell>
                             <TableCell align="center" sx={{ fontWeight: 'bold' }}>操作</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {customers.map((customer) => {
-                            const plan = plans.find(p => p.id === customer.planId);
+                        {sortedCustomers.map((customer) => {
+                            const planName = getPlanName(customer.planId);
                             return (
                                 <TableRow key={customer.id} hover>
                                     <TableCell sx={{ fontWeight: '500' }}>{customer.name}</TableCell>
-                                    <TableCell>{plan ? plan.name : '未設定'}</TableCell>
-                                    <TableCell>{Array.isArray(customer.email) ? customer.email.join(', ') : customer.email}</TableCell>
+                                    <TableCell>{planName}</TableCell>
+                                    <TableCell>{getEmailText(customer.email)}</TableCell>
                                     <TableCell align="center">
                                         <Stack direction="row" spacing={1} justifyContent="center">
                                             <Tooltip title="詳細表示">

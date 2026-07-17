@@ -14,4 +14,4 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 export const db = getFirestore(app);
-export const auth = getAuth(app); // これを必ず追加してください 
+export const auth = getAuth(app); // これを必ず追加してください
