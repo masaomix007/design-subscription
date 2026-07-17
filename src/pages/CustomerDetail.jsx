@@ -78,28 +78,67 @@ const CustomerDetail = () => {
     };
 
     const getWorkSortValue = (work, field) => {
-        if (field === 'dateUsed') {
-            const timestamp = Date.parse(work?.dateUsed || '');
-            return Number.isNaN(timestamp) ? 0 : timestamp;
-        }
+        if (field === 'dateUsed') return getDateTimestamp(work?.dateUsed);
         if (field === 'pointsUsed') return Number(work?.pointsUsed) || 0;
         if (field === 'status') return work?.status || '制作中';
         return work?.name || '';
     };
 
-    const sortedCustomerWorks = [...customerWorks].sort((a, b) => {
-        const aValue = getWorkSortValue(a, workSortBy);
-        const bValue = getWorkSortValue(b, workSortBy);
-        let result = 0;
-
-        if (typeof aValue === 'number' && typeof bValue === 'number') {
-            result = aValue - bValue;
-        } else {
-            result = String(aValue).localeCompare(String(bValue), 'ja', { numeric: true, sensitivity: 'base' });
+    const getWorkMonthGroup = (work) => {
+        const timestamp = getDateTimestamp(work?.dateUsed);
+        if (!timestamp) {
+            return {
+                key: 'undated',
+                label: '実施日未設定',
+                timestamp: 0,
+            };
         }
 
-        return workSortDirection === 'asc' ? result : -result;
-    });
+        const date = new Date(timestamp);
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1;
+
+        return {
+            key: `${year}-${String(month).padStart(2, '0')}`,
+            label: `${year}年${month}月`,
+            timestamp: new Date(year, month - 1, 1).getTime(),
+        };
+    };
+
+    const groupedCustomerWorks = Object.values(customerWorks.reduce((groups, work) => {
+        const group = getWorkMonthGroup(work);
+        if (!groups[group.key]) {
+            groups[group.key] = {
+                ...group,
+                works: [],
+                totalPoints: 0,
+            };
+        }
+
+        groups[group.key].works.push(work);
+        groups[group.key].totalPoints += Number(work?.pointsUsed) || 0;
+
+        return groups;
+    }, {})).sort((a, b) => {
+        if (a.key === 'undated') return 1;
+        if (b.key === 'undated') return -1;
+        return b.timestamp - a.timestamp;
+    }).map(group => ({
+        ...group,
+        works: [...group.works].sort((a, b) => {
+            const aValue = getWorkSortValue(a, workSortBy);
+            const bValue = getWorkSortValue(b, workSortBy);
+            let result = 0;
+
+            if (typeof aValue === 'number' && typeof bValue === 'number') {
+                result = aValue - bValue;
+            } else {
+                result = String(aValue).localeCompare(String(bValue), 'ja', { numeric: true, sensitivity: 'base' });
+            }
+
+            return workSortDirection === 'asc' ? result : -result;
+        }),
+    }));
 
     const handleTransactionSort = (field) => {
         const isAsc = transactionSortBy === field && transactionSortDirection === 'asc';
@@ -303,28 +342,42 @@ const CustomerDetail = () => {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {sortedCustomerWorks.map(work => (
-                            <TableRow key={work.id} hover>
-                                <TableCell sx={{ fontSize: '0.85rem' }}>{formatSafeDate(work.dateUsed, 'yyyy/MM/dd')}</TableCell>
-                                <TableCell>
-                                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{work.name}</Typography>
-                                    <Typography variant="caption" color="text.secondary">{work.memo}</Typography>
-                                </TableCell>
-                                <TableCell align="right" sx={{ fontWeight: 'bold' }}>{work.pointsUsed} pt</TableCell>
-                                <TableCell align="center">
-                                    <Chip label={work.status || '制作中'} size="small" 
-                                        sx={{ fontWeight: 'bold', bgcolor: work.status === '校了' ? '#e8f5e9' : '#ffebee', color: work.status === '校了' ? '#2e7d32' : '#c62828' }}
-                                    />
-                                </TableCell>
-                                <TableCell align="center">
-                                    {work.deliveryUrl && <Button size="small" variant="outlined" startIcon={<DownloadIcon />} href={work.deliveryUrl} target="_blank">ダウンロード</Button>}
-                                </TableCell>
-                                {isAdmin && (
-                                    <TableCell align="center">
-                                        <Button size="small" onClick={() => { setSelectedTask(work); setTaskFormOpen(true); }}>編集</Button>
+                        {groupedCustomerWorks.map(group => (
+                            <React.Fragment key={group.key}>
+                                <TableRow>
+                                    <TableCell colSpan={isAdmin ? 6 : 5} sx={{ bgcolor: '#eef3f8', py: 1.25 }}>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
+                                            <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{group.label}</Typography>
+                                            <Typography variant="body2" color="text.secondary">
+                                                月間消費ポイント：<Box component="span" sx={{ fontWeight: 'bold', color: 'text.primary' }}>{group.totalPoints.toLocaleString()}pt</Box>
+                                            </Typography>
+                                        </Box>
                                     </TableCell>
-                                )}
-                            </TableRow>
+                                </TableRow>
+                                {group.works.map(work => (
+                                    <TableRow key={work.id} hover>
+                                        <TableCell sx={{ fontSize: '0.85rem' }}>{formatSafeDate(work.dateUsed, 'yyyy/MM/dd')}</TableCell>
+                                        <TableCell>
+                                            <Typography variant="body2" sx={{ fontWeight: 500 }}>{work.name}</Typography>
+                                            <Typography variant="caption" color="text.secondary">{work.memo}</Typography>
+                                        </TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>{work.pointsUsed} pt</TableCell>
+                                        <TableCell align="center">
+                                            <Chip label={work.status || '制作中'} size="small" 
+                                                sx={{ fontWeight: 'bold', bgcolor: work.status === '校了' ? '#e8f5e9' : '#ffebee', color: work.status === '校了' ? '#2e7d32' : '#c62828' }}
+                                            />
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            {work.deliveryUrl && <Button size="small" variant="outlined" startIcon={<DownloadIcon />} href={work.deliveryUrl} target="_blank">ダウンロード</Button>}
+                                        </TableCell>
+                                        {isAdmin && (
+                                            <TableCell align="center">
+                                                <Button size="small" onClick={() => { setSelectedTask(work); setTaskFormOpen(true); }}>編集</Button>
+                                            </TableCell>
+                                        )}
+                                    </TableRow>
+                                ))}
+                            </React.Fragment>
                         ))}
                     </TableBody>
                 </Table>
