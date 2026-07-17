@@ -81,7 +81,7 @@ const TaskForm = ({ open, onClose, customerId, task }) => {
             };
 
             if (isEditing) {
-                await updateWork(customerId, task.id, payload);
+                await updateWork(task.id, payload);
                 enqueueSnackbar('実績を更新しました', { variant: 'success' });
             } else {
                 await addWork(customerId, payload);
@@ -110,7 +110,13 @@ const TaskForm = ({ open, onClose, customerId, task }) => {
                             // --- 【修正】現在の案件名と一致するものを初期選択状態にする ---
                             value={catalogValue}
                             onChange={handleCatalogSelect}
-                            renderInput={(params) => <TextField {...params} label="制作物カタログから選択" />}
+                            renderInput={(params) => (
+                                <TextField
+                                    {...params}
+                                    label="制作物マスタから選択（任意）"
+                                    helperText="制作物マスタを選択すると、案件名・カテゴリ・消費ポイントが自動入力されます。"
+                                />
+                            )}
                             disabled={isSubmitting}
                             // 一致判定の基準（名前が同じなら同じ選択肢とみなす）
                             isOptionEqualToValue={(option, value) => option.name === value?.name}
