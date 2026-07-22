@@ -146,7 +146,11 @@ const CustomerDetail = () => {
         setTransactionSortDirection(isAsc ? 'desc' : 'asc');
     };
 
-    const getTransactionTypeLabel = (type) => type === 'grant' ? '付与' : '消費';
+    const getTransactionTypeLabel = (type) => {
+        if (type === 'grant') return '付与';
+        if (type === 'work_refund') return '制作実績返還';
+        return '消費';
+    };
 
     const getTransactionSortValue = (transaction, field) => {
         if (field === 'date') return getDateTimestamp(transaction?.date);

@@ -3,18 +3,33 @@ import { useData } from '../contexts/DataContext';
 import { useSnackbar } from 'notistack';
 import {
     Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, 
-    FormControl, InputLabel, Select, MenuItem, CircularProgress, Autocomplete, Box, Stack
+    FormControl, InputLabel, Select, MenuItem, CircularProgress, Autocomplete, Box, Stack,
+    Typography
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { parseISO } from 'date-fns';
 
 const TaskForm = ({ open, onClose, customerId, task }) => {
-    const { addWork, updateWork, worksCatalog } = useData();
+    const { addWork, updateWork, deleteWorkWithRefund, transactions, worksCatalog } = useData();
     const { enqueueSnackbar } = useSnackbar();
     const [formData, setFormData] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const isEditing = task != null;
+    const originalTransactions = isEditing
+        ? (transactions[customerId] || []).filter(transaction => (
+            transaction.workId === task.id
+            && transaction.type === 'consumption'
+            && Number(transaction.points) < 0
+        ))
+        : [];
+    const originalPoints = originalTransactions.length === 1
+        ? Math.abs(Number(originalTransactions[0].points))
+        : Number(task?.pointsUsed) === 0 && originalTransactions.length === 0
+            ? 0
+            : null;
 
     useEffect(() => {
         if (open) {
@@ -96,6 +111,26 @@ const TaskForm = ({ open, onClose, customerId, task }) => {
         }
     };
 
+    const handleDelete = async () => {
+        setIsDeleting(true);
+        try {
+            const result = await deleteWorkWithRefund(customerId, task.id);
+            setDeleteDialogOpen(false);
+            enqueueSnackbar(
+                result.refundPoints > 0
+                    ? `制作実績を削除し、${result.refundPoints.toLocaleString()}ポイントを返還しました`
+                    : '制作実績を削除しました',
+                { variant: 'success' }
+            );
+            onClose();
+        } catch (error) {
+            console.error('Work deletion failed:', error);
+            enqueueSnackbar(error.message || '制作実績の削除に失敗しました。', { variant: 'error' });
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
             <DialogTitle sx={{ fontWeight: 'bold' }}>
@@ -153,11 +188,47 @@ const TaskForm = ({ open, onClose, customerId, task }) => {
                 </Box>
             </DialogContent>
             <DialogActions sx={{ px: 3, py: 2 }}>
+                {isEditing && (
+                    <Button
+                        color="error"
+                        variant="outlined"
+                        onClick={() => setDeleteDialogOpen(true)}
+                        disabled={isSubmitting || isDeleting}
+                        sx={{ mr: 'auto' }}
+                    >
+                        削除する
+                    </Button>
+                )}
                 <Button onClick={onClose} disabled={isSubmitting}>キャンセル</Button>
                 <Button onClick={handleSubmit} variant="contained" disabled={isSubmitting}>
                     {isEditing ? '更新する' : '追加する'}
                 </Button>
             </DialogActions>
+            <Dialog open={deleteDialogOpen} onClose={() => !isDeleting && setDeleteDialogOpen(false)} maxWidth="xs" fullWidth>
+                <DialogTitle>制作実績の削除確認</DialogTitle>
+                <DialogContent dividers>
+                    <Stack spacing={1.5}>
+                        <Typography>
+                            この制作実績を削除します。使用済みポイントは取引履歴に返還記録を追加したうえで戻されます。この操作を実行しますか？
+                        </Typography>
+                        <Typography variant="body2"><strong>案件名：</strong>{task?.name || '名称未設定'}</Typography>
+                        <Typography variant="body2">
+                            <strong>元の消費ポイント：</strong>
+                            {originalPoints == null ? '特定できません' : `${originalPoints.toLocaleString()} pt`}
+                        </Typography>
+                        <Typography variant="body2">
+                            <strong>返還予定ポイント：</strong>
+                            {originalPoints == null ? '確認できないため実行時に停止します' : `${originalPoints.toLocaleString()} pt`}
+                        </Typography>
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeleteDialogOpen(false)} disabled={isDeleting}>キャンセル</Button>
+                    <Button color="error" variant="contained" onClick={handleDelete} disabled={isDeleting}>
+                        {isDeleting ? <CircularProgress size={20} color="inherit" /> : '削除を実行する'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Dialog>
     );
 };
